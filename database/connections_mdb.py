@@ -1,6 +1,6 @@
 import pymongo
 from sample_info import tempDict
-from info import DATABASE_URI, DATABASE_NAME, SECONDDB_URI
+from info import DATABASE_URI, DATABASE_NAME, DATABASE_URI2
 
 import logging
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ myclient = pymongo.MongoClient(DATABASE_URI)
 mydb = myclient[DATABASE_NAME]
 mycol = mydb['CONNECTION']  
 
-myclient2 = pymongo.MongoClient(SECONDDB_URI)
+myclient2 = pymongo.MongoClient(DATABASE_URI2)
 mydb2 = myclient2[DATABASE_NAME]
 mycol2 = mydb2['CONNECTION']
 
