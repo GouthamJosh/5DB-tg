@@ -162,7 +162,6 @@ async def set_skip_number(bot, message):
 
 async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
     """Indexes files into one specific database."""
-    # Map the requested DB number to the correct URI
     uri_map = {
         1: DATABASE_URI,
         2: DATABASE_URI2,
@@ -171,19 +170,21 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
         5: DATABASE_URI5
     }
     
-    # Set the active database for this indexing run!
     tempDict['indexDB'] = uri_map.get(db_num, DATABASE_URI)
-    await choose_mediaDB() # Force the db filter to recognize the change
+    await choose_mediaDB() 
     
     total_files = 0
     duplicate = 0
     no_media = 0
     errors = 0
     fst_msg_id = temp.CURRENT
+    
     start_time = time.time()
+    last_update_time = time.time() # Track the last time we updated the UI
+    
     remaining_time_str = "N/A"
     remaining_index = 0
-    elapsed_time_str = "N/A"
+    elapsed_time_str = "0s"
     
     async with lock:
         try:
@@ -195,27 +196,39 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
                     break
                 
                 current += 1
-                tz = pytz.timezone('Asia/Kolkata')
-                ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
                 
-                if current % 35 == 0:
-                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                # EXACTLY EVERY 20 SECONDS UPDATE UI
+                if time.time() - last_update_time >= 20:
+                    last_update_time = time.time() # Reset the 20-second timer
+                    
+                    tz = pytz.timezone('Asia/Kolkata')
+                    ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
+                    
                     elapsed_time = time.time() - start_time
-                    remaining_time = (lst_msg_id - current - 1) * elapsed_time / (current - fst_msg_id + 1)
+                    processed_count = current - fst_msg_id + 1
+                    
+                    if processed_count > 0:
+                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count)
+                    else:
+                        remaining_time = 0
+                        
                     remaining_time_str = get_readable_time(remaining_time)
                     elapsed_time_str = get_readable_time(elapsed_time)
                     remaining_index = lst_msg_id - current
                     
-                    await msg.edit_text(
-                        f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
-                        f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
-                        f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
-                        f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
-                        f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
-                        f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
-                        f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
-                        reply_markup=reply)
-                    await asyncio.sleep(1)
+                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                    try:
+                        await msg.edit_text(
+                            f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
+                            f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
+                            f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
+                            f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
+                            f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
+                            f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
+                            f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
+                            reply_markup=reply)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
 
                 if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
                     no_media += 1
@@ -230,7 +243,6 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
                 media.caption = message.caption
                 
                 if await check_file(media) == "okda":
-                    # Save file handles the routing based on tempDict['indexDB']
                     aynav, vnay = await save_file(media)
                     
                     if aynav: total_files += 1
@@ -259,7 +271,6 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
 
 async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
     """Indexes files distributing them evenly across all 5 databases (Round-Robin)."""
-    # Put all URIs in a list to rotate through
     db_uris = [DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5]
     
     total_files = 0
@@ -267,10 +278,13 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
     no_media = 0
     errors = 0
     fst_msg_id = temp.CURRENT
+    
     start_time = time.time()
+    last_update_time = time.time() # Track the last time we updated the UI
+    
     remaining_time_str = "N/A"
     remaining_index = 0
-    elapsed_time_str = "N/A"
+    elapsed_time_str = "0s"
     
     async with lock:
         try:
@@ -282,34 +296,46 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
                     break
                 
                 current += 1
-                tz = pytz.timezone('Asia/Kolkata')
-                ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
                 
-                if current % 500 == 0:
-                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                # EXACTLY EVERY 20 SECONDS UPDATE UI AND MONGO PROGRESS
+                if time.time() - last_update_time >= 20:
+                    last_update_time = time.time() # Reset the 20-second timer
+                    
+                    tz = pytz.timezone('Asia/Kolkata')
+                    ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
+                    
                     elapsed_time = time.time() - start_time
-                    remaining_time = (lst_msg_id - current - 1) * elapsed_time / (current - fst_msg_id + 1)
+                    processed_count = current - fst_msg_id + 1
+                    
+                    if processed_count > 0:
+                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count)
+                    else:
+                        remaining_time = 0
+                        
                     remaining_time_str = get_readable_time(remaining_time)
                     elapsed_time_str = get_readable_time(elapsed_time)
                     remaining_index = lst_msg_id - current
                     
-                    # Save progress to MongoDB to recover from crashes
+                    # Save progress to MongoDB (Now only happens every 20 seconds instead of 500 msgs)
                     incol.update_one(
                         {"_id": "index_progress"},
                         {"$set": {"last_indexed_file": current, "last_msg_id": lst_msg_id, "chat_id": chat}},
                         upsert=True
                     )
                     
-                    await msg.edit_text(
-                        f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
-                        f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
-                        f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
-                        f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
-                        f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
-                        f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
-                        f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
-                        reply_markup=reply)
-                    await asyncio.sleep(1)
+                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                    try:
+                        await msg.edit_text(
+                            f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
+                            f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
+                            f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
+                            f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
+                            f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
+                            f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
+                            f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
+                            reply_markup=reply)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
                 
                 if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
                     no_media += 1
@@ -324,9 +350,8 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
                 media.caption = message.caption
                 
                 if await check_file(media) == "okda":
-                    # Rotate the active DB based on the current message count
                     tempDict['indexDB'] = db_uris[current % 5]
-                    await choose_mediaDB() # Force the db filter to recognize the change
+                    await choose_mediaDB()
                     
                     aynav, vnay = await save_file(media)
                     
@@ -352,6 +377,5 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
                 f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
                 f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n"
             )
-            # Clear tracking on completion to prevent a fresh start from pulling old data
             if not temp.CANCEL:
                 incol.delete_one({"_id": "index_progress"})
