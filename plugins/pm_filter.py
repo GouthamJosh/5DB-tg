@@ -14,7 +14,11 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
 from utils import get_size, is_subscribed, get_poster, search_gagala, temp, get_settings, save_group_settings
 from database.users_chats_db import db
-from database.ia_filterdb import Media, Media2, get_file_details, get_search_results, get_bad_files, db as clientDB, db2 as clientDB2
+from database.ia_filterdb import (
+    Media, Media2, Media3, Media4, Media5,
+    get_file_details, get_search_results, get_bad_files,
+    db as clientDB, db2 as clientDB2, db3 as clientDB3, db4 as clientDB4, db5 as clientDB5
+)
 from database.filters_mdb import (
     del_all,
     find_filter,
@@ -533,56 +537,57 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
-    elif query.data == "stats":
+    elif query.data in ["stats", "rfrsh"]:
+        if query.data == "rfrsh":
+            await query.answer("Fetching MongoDb DataBase")
         buttons = [[
             InlineKeyboardButton('👩‍🦯 Back', callback_data='help'),
             InlineKeyboardButton('♻️', callback_data='rfrsh')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
-        #primary db
-        totalp = await Media.count_documents()
-        #secondary db
-        totalsec = await Media2.count_documents()
-        #users and chats
+
+        # --- Count documents from all 5 DBs ---
+        total1 = await Media.count_documents()
+        total2 = await Media2.count_documents()
+        total3 = await Media3.count_documents()
+        total4 = await Media4.count_documents()
+        total5 = await Media5.count_documents()
+        grand_total = total1 + total2 + total3 + total4 + total5
+
+        # --- Users and chats ---
         users = await db.total_users_count()
         chats = await db.total_chat_count()
-        #primary db
-        stats = await clientDB.command('dbStats')
-        used_dbSize = (stats['dataSize']/(1024*1024))+(stats['indexSize']/(1024*1024))
-        free_dbSize = 512-used_dbSize
-        #secondary db
+
+        # --- DB sizes ---
+        def db_usage(stats):
+            used = (stats['dataSize'] / (1024 * 1024)) + (stats['indexSize'] / (1024 * 1024))
+            free = 512 - used
+            return round(used, 2), round(free, 2)
+
+        stats1 = await clientDB.command('dbStats')
+        used1, free1 = db_usage(stats1)
+
         stats2 = await clientDB2.command('dbStats')
-        used_dbSize2 = (stats2['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
-        free_dbSize2 = 512-used_dbSize2
+        used2, free2 = db_usage(stats2)
+
+        stats3 = await clientDB3.command('dbStats')
+        used3, free3 = db_usage(stats3)
+
+        stats4 = await clientDB4.command('dbStats')
+        used4, free4 = db_usage(stats4)
+
+        stats5 = await clientDB5.command('dbStats')
+        used5, free5 = db_usage(stats5)
+
         await query.message.edit_text(
-            text=script.STATUS_TXT.format((int(totalp)+int(totalsec)), users, chats, totalp, round(used_dbSize, 2), round(free_dbSize, 2), totalsec, round(used_dbSize2, 2), round(free_dbSize2, 2)),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
-    elif query.data == "rfrsh":
-        await query.answer("Fetching MongoDb DataBase")
-        buttons = [[
-            InlineKeyboardButton('👩‍🦯 Back', callback_data='help'),
-            InlineKeyboardButton('♻️', callback_data='rfrsh')
-        ]]
-        reply_markup = InlineKeyboardMarkup(buttons)
-        #primary db
-        totalp = await Media.count_documents()
-        #secondary db
-        totalsec = await Media2.count_documents()
-        #users and chats
-        users = await db.total_users_count()
-        chats = await db.total_chat_count()
-        #primary db
-        stats = await clientDB.command('dbStats')
-        used_dbSize = (stats['dataSize']/(1024*1024))+(stats['indexSize']/(1024*1024))
-        free_dbSize = 512-used_dbSize
-        #secondary db
-        stats2 = await clientDB2.command('dbStats')
-        used_dbSize2 = (stats2['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
-        free_dbSize2 = 512-used_dbSize2
-        await query.message.edit_text(
-            text=script.STATUS_TXT.format((int(totalp)+int(totalsec)), users, chats, totalp, round(used_dbSize, 2), round(free_dbSize, 2), totalsec, round(used_dbSize2, 2), round(free_dbSize2, 2)),
+            text=script.STATUS_TXT.format(
+                grand_total, users, chats,
+                total1, used1, free1,
+                total2, used2, free2,
+                total3, used3, free3,
+                total4, used4, free4,
+                total5, used5, free5
+            ),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
@@ -671,7 +676,7 @@ async def auto_filter(client, msg, spoll=False):
                     InlineKeyboardButton("\n\n🌐 Wanna try Google instead? 👇", url=f"https://www.google.com/search?q={search.replace(' ', '+')}")
                 ]]
                 autodel = await message.reply_text(
-                    f"👋 Hey {message.from_user.mention}, No results found for your query {search}.\n\n🎬 Please enter the movie or series name in the correct search format.\n\n📌 We only provide OTT-released movies. Movies still running in theaters or not yet released on OTT are not available.\n\n🚫 Camera prints are not shared — only HD quality movies are provided.\n<blockquote>⚠️ If you used the correct spelling and the movie has already been released on OTT but you still didn’t get the file, kindly report to admin 👉 @im_goutham_josh</blockquote>",
+                    f"👋 Hey {message.from_user.mention}, No results found for your query {search}.\n\n🎬 Please enter the movie or series name in the correct search format.\n\n📌 We only provide OTT-released movies. Movies still running in theaters or not yet released on OTT are not available.\n\n🚫 Camera prints are not shared — only HD quality movies are provided.\n<blockquote>⚠️ If you used the correct spelling and the movie has already been released on OTT but you still didn't get the file, kindly report to admin 👉 @im_goutham_josh</blockquote>",
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
                 await asyncio.sleep(15)
@@ -738,7 +743,7 @@ async def auto_filter(client, msg, spoll=False):
         btn.append([InlineKeyboardButton(text="🗓 1/1", callback_data="pages")])
 
     # ✅ Simple caption (no IMDb)
-    cap = f"<b>Hᴇʏ {message.from_user.mention}, Hᴇʀᴇ’ꜱ Wʜᴀᴛ I Fᴏᴜɴᴅ Fᴏʀ Yᴏᴜʀ Qᴜᴇʀʏ:</b> <code>{search}</code>"
+    cap = f"<b>Hᴇʏ {message.from_user.mention}, Hᴇʀᴇ'ꜱ Wʜᴀᴛ I Fᴏᴜɴᴅ Fᴏʀ Yᴏᴜʀ Qᴜᴇʀʏ:</b> <code>{search}</code>"
 
     # ✅ Send response
     try:
