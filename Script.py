@@ -78,24 +78,38 @@ Cᴏᴍᴍᴀɴᴅs Aɴᴅ Usᴀɢᴇ:
  <b>✯ Maintained by : <a href="https://t.me/im_goutham_josh">Owner</a></b>
     """
     STATUS_TXT = """<b><blockquote>
-Tᴏᴛᴀʟ Fɪʟᴇs Fʀᴏᴍ Bᴏᴛʜ DBs: <code>{}</code>
+Tᴏᴛᴀʟ Fɪʟᴇs Fʀᴏᴍ Aʟʟ DBs: <code>{}</code>
 </blockquote>
 
 👥 Bᴏᴛ Usᴇʀs ᴀɴᴅ Cʜᴀᴛs
 ★ Tᴏᴛᴀʟ Usᴇʀs: <code>{}</code>
 ★ Tᴏᴛᴀʟ Cʜᴀᴛs: <code>{}</code>
 
-📦 Pʀɪᴍᴀʀʏ Dᴀᴛᴀʙᴀsᴇ
+📦 Dᴀᴛᴀʙᴀsᴇ 1
 ★ Tᴏᴛᴀʟ Fɪʟᴇs: <code>{}</code>
 ★ Usᴇᴅ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
 ★ Fʀᴇᴇ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
 
-📦 Sᴇᴄᴏɴᴅᴀʀʏ Dᴀᴛᴀʙᴀsᴇ
+📦 Dᴀᴛᴀʙᴀsᴇ 2
+★ Tᴏᴛᴀʟ Fɪʟᴇs: <code>{}</code>
+★ Usᴇᴅ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+★ Fʀᴇᴇ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+
+📦 Dᴀᴛᴀʙᴀsᴇ 3
+★ Tᴏᴛᴀʟ Fɪʟᴇs: <code>{}</code>
+★ Usᴇᴅ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+★ Fʀᴇᴇ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+
+📦 Dᴀᴛᴀʙᴀsᴇ 4
+★ Tᴏᴛᴀʟ Fɪʟᴇs: <code>{}</code>
+★ Usᴇᴅ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+★ Fʀᴇᴇ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
+
+📦 Dᴀᴛᴀʙᴀsᴇ 5
 ★ Tᴏᴛᴀʟ Fɪʟᴇs: <code>{}</code>
 ★ Usᴇᴅ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
 ★ Fʀᴇᴇ Sᴛᴏʀᴀɢᴇ: <code>{} MB</code>
 </b>"""
-
     
     LOG_TEXT_G = """#NewGroup
 Kuttu Bot 2 DB💫
