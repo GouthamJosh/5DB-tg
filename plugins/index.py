@@ -198,7 +198,7 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
                 tz = pytz.timezone('Asia/Kolkata')
                 ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
                 
-                if current % 250 == 0:
+                if current % 35 == 0:
                     reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
                     elapsed_time = time.time() - start_time
                     remaining_time = (lst_msg_id - current - 1) * elapsed_time / (current - fst_msg_id + 1)
