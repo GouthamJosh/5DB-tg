@@ -5,16 +5,22 @@ from pyrogram.errors import FloodWait
 from pyrogram.errors.exceptions.bad_request_400 import ChannelInvalid, ChatAdminRequired, UsernameInvalid, UsernameNotModified
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Ensure these match your actual info.py and database imports
-from info import ADMINS, INDEX_REQ_CHANNEL as LOG_CHANNEL, DATABASE_URI, DATABASE_NAME
-from database.ia_filterdb import save_file, save_file2, save_file3, save_file4, save_file5, check_file, get_readable_time
+# Ensure these match your actual info.py exports
+from info import ADMINS, INDEX_REQ_CHANNEL as LOG_CHANNEL, DATABASE_NAME
+from info import DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5
+
+# Import tempDict to control DB routing dynamically
+from sample_info import tempDict
+
+# Import the single save_file function and the DB switcher
+from database.ia_filterdb import save_file, check_file, get_readable_time, choose_mediaDB
 from utils import temp
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 lock = asyncio.Lock()
 
-# MongoDB setup for tracking index progress
+# MongoDB setup for tracking index progress (so you don't lose progress if the VPS crashes)
 inclient = pymongo.MongoClient(DATABASE_URI)
 indb = inclient[DATABASE_NAME]
 incol = indb['index']
@@ -151,8 +157,24 @@ async def set_skip_number(bot, message):
     else:
         await message.reply("Give me a skip number")
 
-# Consolidated single-DB indexer to reduce duplicated code
+
+# --- INDEXING LOGIC ---
+
 async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
+    """Indexes files into one specific database."""
+    # Map the requested DB number to the correct URI
+    uri_map = {
+        1: DATABASE_URI,
+        2: DATABASE_URI2,
+        3: DATABASE_URI3,
+        4: DATABASE_URI4,
+        5: DATABASE_URI5
+    }
+    
+    # Set the active database for this indexing run!
+    tempDict['indexDB'] = uri_map.get(db_num, DATABASE_URI)
+    await choose_mediaDB() # Force the db filter to recognize the change
+    
     total_files = 0
     duplicate = 0
     no_media = 0
@@ -208,11 +230,8 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
                 media.caption = message.caption
                 
                 if await check_file(media) == "okda":
-                    # Route to correct save function based on db_num
-                    if db_num == 1: aynav, vnay = await save_file2(media)
-                    elif db_num == 2: aynav, vnay = await save_file3(media)
-                    elif db_num == 3: aynav, vnay = await save_file4(media)
-                    elif db_num == 4: aynav, vnay = await save_file5(media)
+                    # Save file handles the routing based on tempDict['indexDB']
+                    aynav, vnay = await save_file(media)
                     
                     if aynav: total_files += 1
                     elif vnay == 0: duplicate += 1
@@ -237,8 +256,12 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
                 f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n"
             )
 
-# Round-Robin DB Indexing (All DBs)
+
 async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
+    """Indexes files distributing them evenly across all 5 databases (Round-Robin)."""
+    # Put all URIs in a list to rotate through
+    db_uris = [DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5]
+    
     total_files = 0
     duplicate = 0
     no_media = 0
@@ -270,7 +293,7 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
                     elapsed_time_str = get_readable_time(elapsed_time)
                     remaining_index = lst_msg_id - current
                     
-                    # Save progress to MongoDB
+                    # Save progress to MongoDB to recover from crashes
                     incol.update_one(
                         {"_id": "index_progress"},
                         {"$set": {"last_indexed_file": current, "last_msg_id": lst_msg_id, "chat_id": chat}},
@@ -301,11 +324,11 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
                 media.caption = message.caption
                 
                 if await check_file(media) == "okda":
-                    # Round-robin distribution
-                    if current % 4 == 0: aynav, vnay = await save_file2(media)
-                    elif current % 4 == 1: aynav, vnay = await save_file3(media)
-                    elif current % 4 == 2: aynav, vnay = await save_file4(media)
-                    else: aynav, vnay = await save_file5(media)
+                    # Rotate the active DB based on the current message count
+                    tempDict['indexDB'] = db_uris[current % 5]
+                    await choose_mediaDB() # Force the db filter to recognize the change
+                    
+                    aynav, vnay = await save_file(media)
                     
                     if aynav: total_files += 1
                     elif vnay == 0: duplicate += 1
