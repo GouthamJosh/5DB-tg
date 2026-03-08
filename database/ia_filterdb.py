@@ -1,4 +1,3 @@
-
 import logging
 from struct import pack
 import re
@@ -8,20 +7,44 @@ from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow.exceptions import ValidationError
-from info import DATABASE_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_B_TN, SECONDDB_URI
+
+# Ensure these match your info.py exports exactly
+from info import (
+    DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5, 
+    DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_B_TN
+)
 from utils import get_settings, save_group_settings
 from sample_info import tempDict 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-#some basic variables needed
+# Global variable to hold the currently selected database model
 saveMedia = None
 
-#primary db
+# --- DATABASE INSTANCE SETUP ---
+
 client = AsyncIOMotorClient(DATABASE_URI)
 db = client[DATABASE_NAME]
 instance = Instance.from_db(db)
+
+client2 = AsyncIOMotorClient(DATABASE_URI2)
+db2 = client2[DATABASE_NAME]
+instance2 = Instance.from_db(db2)
+
+client3 = AsyncIOMotorClient(DATABASE_URI3)
+db3 = client3[DATABASE_NAME]
+instance3 = Instance.from_db(db3)
+
+client4 = AsyncIOMotorClient(DATABASE_URI4)
+db4 = client4[DATABASE_NAME]
+instance4 = Instance.from_db(db4)
+
+client5 = AsyncIOMotorClient(DATABASE_URI5)
+db5 = client5[DATABASE_NAME]
+instance5 = Instance.from_db(db5)
+
+# --- MODELS SETUP ---
 
 @instance.register
 class Media(Document):
@@ -37,11 +60,6 @@ class Media(Document):
         indexes = ('$file_name', )
         collection_name = COLLECTION_NAME
 
-#secondary db
-client2 = AsyncIOMotorClient(SECONDDB_URI)
-db2 = client2[DATABASE_NAME]
-instance2 = Instance.from_db(db2)
-
 @instance2.register
 class Media2(Document):
     file_id = fields.StrField(attribute='_id')
@@ -56,26 +74,96 @@ class Media2(Document):
         indexes = ('$file_name', )
         collection_name = COLLECTION_NAME
 
+@instance3.register
+class Media3(Document):
+    file_id = fields.StrField(attribute='_id')
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ('$file_name', )
+        collection_name = COLLECTION_NAME
+
+@instance4.register
+class Media4(Document):
+    file_id = fields.StrField(attribute='_id')
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ('$file_name', )
+        collection_name = COLLECTION_NAME
+
+@instance5.register
+class Media5(Document):
+    file_id = fields.StrField(attribute='_id')
+    file_ref = fields.StrField(allow_none=True)
+    file_name = fields.StrField(required=True)
+    file_size = fields.IntField(required=True)
+    file_type = fields.StrField(allow_none=True)
+    mime_type = fields.StrField(allow_none=True)
+    caption = fields.StrField(allow_none=True)
+
+    class Meta:
+        indexes = ('$file_name', )
+        collection_name = COLLECTION_NAME
+
+# --- DYNAMIC DB ROUTING ---
+
 async def choose_mediaDB():
-    """This Function chooses which database to use based on the value of indexDB key in the dict tempDict."""
+    """Chooses which database to use based on the indexDB key in tempDict."""
     global saveMedia
-    if tempDict['indexDB'] == DATABASE_URI:
-        logger.info("Using first db (Media)")
+    if tempDict.get('indexDB') == DATABASE_URI:
         saveMedia = Media
-    else:
-        logger.info("Using second db (Media2)")
+    elif tempDict.get('indexDB') == DATABASE_URI2:
         saveMedia = Media2
+    elif tempDict.get('indexDB') == DATABASE_URI3:
+        saveMedia = Media3
+    elif tempDict.get('indexDB') == DATABASE_URI4:
+        saveMedia = Media4
+    elif tempDict.get('indexDB') == DATABASE_URI5:
+        saveMedia = Media5
+    else:
+        # Fallback to DB1
+        logger.warning("indexDB not matched or empty, falling back to Media (DB1)")
+        saveMedia = Media
+
+async def check_file(media):
+    """Check if file is present in any of the 5 databases"""
+    file_id, file_ref = unpack_new_file_id(media.file_id)
+    
+    if await Media.collection.find_one({"_id": file_id}): return None
+    if await Media2.collection.find_one({"_id": file_id}): return None
+    if await Media3.collection.find_one({"_id": file_id}): return None
+    if await Media4.collection.find_one({"_id": file_id}): return None
+    if await Media5.collection.find_one({"_id": file_id}): return None
+    
+    return "okda"
 
 async def save_file(media):
-    """Save file in database"""
+    """Save file dynamically in the selected database via choose_mediaDB"""
+    if saveMedia is None:
+        await choose_mediaDB()
 
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    
+    # Extensive cleanup regex from snippet 1
+    file_name = re.sub(r"(_|\+\s|\-|\.|\+|\[MM\]\s|\[MM\]_|\@TvSeriesBay|\@Cinema\sCompany|\@Cinema_Company|\@CC_|\@CC|\@MM_New|\@MM_Linkz|\@MOVIEHUNT|\@CL|\@FBM|\@CKMSERIES|www_DVDWap_Com_|MLM|\@WMR|\[CF\]\s|\[CF\]|\@IndianMoviez|\@tamil_mm|\@infotainmentmedia|\@trolldcompany|\@Rarefilms|\@yamandanmovies|\[YM\]|\@Mallu_Movies|\@YTSLT|\@DailyMovieZhunt|\@I_M_D_B|\@CC_All|\@PM_Old|Dvdworld|\[KMH\]|\@FBM_HW|\@Film_Kottaka|\@CC_X265|\@CelluloidCineClub|\@cinemaheist|\@telugu_moviez|\@CR_Rockers|\@CCineClub|KC_|\[KC\])", " ", str(media.file_name))
+    
     try:
-        if await Media.count_documents({'file_id': file_id}, limit=1):
-            print(f'{getattr(media, "file_name", "NO_FILE")} is already saved in primary DB!')
+        # Prevent exact duplicate in the currently active DB
+        if await saveMedia.count_documents({'file_id': file_id}, limit=1):
+            logger.warning(f'{getattr(media, "file_name", "NO_FILE")} is already saved in the active DB!')
             return False, 0
+            
         file = saveMedia(
             file_id=file_id,
             file_ref=file_ref,
@@ -83,92 +171,103 @@ async def save_file(media):
             file_size=media.file_size,
             file_type=media.file_type,
             mime_type=media.mime_type,
-            caption=media.caption.html if media.caption else None,
+            caption=media.caption.html if media.caption else None
         )
     except ValidationError:
-        print('Error occurred while saving file in database')
+        logger.exception('Error occurred while saving file in database')
         return False, 2
     else:
         try:
             await file.commit()
         except DuplicateKeyError:  
-            print(f'{getattr(media, "file_name", "NO_FILE")} is already saved in Selected database')
+            logger.warning(f'{getattr(media, "file_name", "NO_FILE")} is already saved in selected database')
             return False, 0
         else:
-            print(f'{getattr(media, "file_name", "NO_FILE")} is saved to Selected database')
+            logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to selected database')
             return True, 1
 
+# --- SEARCH LOGIC (INTERLEAVING 5 DBS) ---
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """For given query return (results, next_offset)"""
+    """Queries all 5 databases, interleaves the results, and handles offsets."""
     if chat_id is not None:
-        settings = await get_settings(int(chat_id))
-        max_results = 10  # Default max results
         try:
-            max_results = 10
-        except NameError:
-            pass  # If MAX_B_TN is not defined, continue with the default
+            settings = await get_settings(int(chat_id))
+            # Optional: Override max_results using group settings here if desired
+        except Exception as e:
+            logger.error(f"Settings fetch error: {e}")
 
     query = query.strip()
-    
+
     if not query:
         raw_pattern = '.'
     elif ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+        raw_pattern = r'(\b|[\.\+\-_]|\s|&)' + query + r'(\b|[\.\+\-_]|\s|&)'
     else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
-    
+        raw_pattern = query.replace(' ', r'.*[&\s\.\+\-_()\[\]]')
+
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
-        return []
+    except re.error:
+        return [], '', 0
 
     if USE_CAPTION_FILTER:
-        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        filter_dict = {'$or': [{'file_name': regex}, {'caption': regex}]}
     else:
-        filter = {'file_name': regex}
+        filter_dict = {'file_name': regex}
 
     if file_type:
-        filter['file_type'] = file_type
+        filter_dict['file_type'] = file_type
 
-    total_results = ((await Media.count_documents(filter))+(await Media2.count_documents(filter)))
+    if offset < 0: offset = 0
 
-    # Ensures `max_results` is an even number
-    if max_results % 2 != 0:  # If `max_results` is odd, add 1 to make it even
-        logger.info(f"Since max_results is an odd number ({max_results}), bot will use {max_results+1} as max_results to make it even.")
-        max_results += 1
+    # Get total count across all databases
+    total_results = (
+        await Media.count_documents(filter_dict) + 
+        await Media2.count_documents(filter_dict) + 
+        await Media3.count_documents(filter_dict) + 
+        await Media4.count_documents(filter_dict) + 
+        await Media5.count_documents(filter_dict)
+    )
 
-    cursor = Media.find(filter)
-    cursor2 = Media2.find(filter)
-    # Sort by recent
-    cursor.sort('$natural', -1)
-    cursor2.sort('$natural', -1)
-    # Slice files according to offset and max results
-    cursor2.skip(offset).limit(max_results)
-    # Get list of files
-    fileList2 = await cursor2.to_list(length=max_results)
-    if len(fileList2) < max_results:
-        next_offset = offset + len(fileList2)
-        cursorSkipper = (next_offset - (await Media2.count_documents(filter)))
-        cursor.skip(cursorSkipper if cursorSkipper >= 0 else 0).limit(max_results - len(fileList2))
-        fileList1 = await cursor.to_list(length=(max_results - len(fileList2)))
-        files = fileList2 + fileList1
-        next_offset = next_offset + len(fileList1)
-    else:
-        files = fileList2
-        next_offset = offset + max_results
+    # Fetch slightly more files from each DB to accommodate interleaving based on offset
+    fetch_length = offset + max_results
+
+    cursor1 = Media.find(filter_dict).sort('$natural', -1)
+    cursor2 = Media2.find(filter_dict).sort('$natural', -1)
+    cursor3 = Media3.find(filter_dict).sort('$natural', -1)
+    cursor4 = Media4.find(filter_dict).sort('$natural', -1)
+    cursor5 = Media5.find(filter_dict).sort('$natural', -1)
+
+    f1 = await cursor1.to_list(length=fetch_length)
+    f2 = await cursor2.to_list(length=fetch_length)
+    f3 = await cursor3.to_list(length=fetch_length)
+    f4 = await cursor4.to_list(length=fetch_length)
+    f5 = await cursor5.to_list(length=fetch_length)
+
+    interleaved_files = []
+    i1 = i2 = i3 = i4 = i5 = 0
+
+    while (i1 < len(f1) or i2 < len(f2) or i3 < len(f3) or i4 < len(f4) or i5 < len(f5)):
+        if i1 < len(f1): interleaved_files.append(f1[i1]); i1 += 1
+        if i2 < len(f2): interleaved_files.append(f2[i2]); i2 += 1
+        if i3 < len(f3): interleaved_files.append(f3[i3]); i3 += 1
+        if i4 < len(f4): interleaved_files.append(f4[i4]); i4 += 1
+        if i5 < len(f5): interleaved_files.append(f5[i5]); i5 += 1
+
+    # Apply the slice for current offset
+    files = interleaved_files[offset:offset + max_results]
+    next_offset = offset + len(files)
+
     if next_offset >= total_results:
         next_offset = ''
+        
     return files, next_offset, total_results
 
-
 async def get_bad_files(query, file_type=None, filter=False):
-    """For given query return (results, next_offset)"""
+    """Retrieve bad files across all 5 databases"""
     query = query.strip()
-    #if filter:
-        #better ?
-        #query = query.replace(' ', r'(\s|\.|\+|\-|_)')
-        #raw_pattern = r'(\s|_|\-|\.|\+)' + query + r'(\s|_|\-|\.|\+)'
+    
     if not query:
         raw_pattern = '.'
     elif ' ' not in query:
@@ -179,42 +278,66 @@ async def get_bad_files(query, file_type=None, filter=False):
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
     except:
-        return []
+        return [], 0
 
     if USE_CAPTION_FILTER:
-        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        filter_dict = {'$or': [{'file_name': regex}, {'caption': regex}]}
     else:
-        filter = {'file_name': regex}
+        filter_dict = {'file_name': regex}
 
     if file_type:
-        filter['file_type'] = file_type
+        filter_dict['file_type'] = file_type
 
-    cursor = Media.find(filter)
-    cursor2 = Media2.find(filter)
-    # Sort by recent
-    cursor.sort('$natural', -1)
-    cursor2.sort('$natural', -1)
-    # Get list of files
-    files = ((await cursor2.to_list(length=(await Media2.count_documents(filter))))+(await cursor.to_list(length=(await Media.count_documents(filter)))))
+    cursor1 = Media.find(filter_dict).sort('$natural', -1)
+    cursor2 = Media2.find(filter_dict).sort('$natural', -1)
+    cursor3 = Media3.find(filter_dict).sort('$natural', -1)
+    cursor4 = Media4.find(filter_dict).sort('$natural', -1)
+    cursor5 = Media5.find(filter_dict).sort('$natural', -1)
 
-    #calculate total results
-    total_results = len(files)
+    files = (
+        await cursor1.to_list(length=await Media.count_documents(filter_dict)) +
+        await cursor2.to_list(length=await Media2.count_documents(filter_dict)) +
+        await cursor3.to_list(length=await Media3.count_documents(filter_dict)) +
+        await cursor4.to_list(length=await Media4.count_documents(filter_dict)) +
+        await cursor5.to_list(length=await Media5.count_documents(filter_dict))
+    )
 
-    return files, total_results
+    return files, len(files)
+
+async def delete_files_below_threshold(db, threshold_size_mb: int = 40, batch_size: int = 20, chat_id: int = None, message_id: int = None):
+    """Deletes files below a size limit from all databases"""
+    limit_size = threshold_size_mb * 1024 * 1024
+    models = [Media, Media2, Media3, Media4, Media5]
+    total_deleted = 0
+    
+    for model in models:
+        cursor = model.find({"file_size": {"$lt": limit_size}}).limit(batch_size // len(models))
+        async for document in cursor:
+            try:
+                await model.collection.delete_one({"_id": document["file_id"]})
+                total_deleted += 1
+                logger.info(f'Deleted file from {model.__name__}: {document["file_name"]}')
+            except Exception as e:
+                logger.error(f'Error deleting file from {model.__name__}: {document["file_name"]}, {e}')
+
+    return total_deleted
 
 async def get_file_details(query):
-    filter = {'file_id': query}
-    cursor = Media.find(filter)
-    filedetails = await cursor.to_list(length=1)
-    if not filedetails:
-        cursor2 = Media2.find(filter)
-        filedetails = await cursor2.to_list(length=1)
-    return filedetails
+    """Look up a file_id across all 5 databases sequentially"""
+    filter_dict = {'file_id': query}
+    
+    models = [Media, Media2, Media3, Media4, Media5]
+    for model in models:
+        filedetails = await model.find(filter_dict).to_list(length=1)
+        if filedetails:
+            return filedetails
+    return []
+
+# --- UTILS ---
 
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
-
     for i in s + bytes([22]) + bytes([4]):
         if i == 0:
             n += 1
@@ -222,27 +345,30 @@ def encode_file_id(s: bytes) -> str:
             if n:
                 r += b"\x00" + bytes([n])
                 n = 0
-
             r += bytes([i])
-
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
-
 
 def encode_file_ref(file_ref: bytes) -> str:
     return base64.urlsafe_b64encode(file_ref).decode().rstrip("=")
 
-
 def unpack_new_file_id(new_file_id):
-    """Return file_id, file_ref"""
     decoded = FileId.decode(new_file_id)
     file_id = encode_file_id(
-        pack(
-            "<iiqq",
-            int(decoded.file_type),
-            decoded.dc_id,
-            decoded.media_id,
-            decoded.access_hash
-        )
+        pack("<iiqq", int(decoded.file_type), decoded.dc_id, decoded.media_id, decoded.access_hash)
     )
     file_ref = encode_file_ref(decoded.file_reference)
     return file_id, file_ref
+
+def get_readable_time(seconds) -> str:
+    result = ""
+    (days, remainder) = divmod(seconds, 86400)
+    if int(days) != 0: result += f"{int(days)}d"
+    
+    (hours, remainder) = divmod(remainder, 3600)
+    if int(hours) != 0: result += f"{int(hours)}h"
+    
+    (minutes, seconds) = divmod(remainder, 60)
+    if int(minutes) != 0: result += f"{int(minutes)}m"
+    
+    result += f"{int(seconds)}s"
+    return result
