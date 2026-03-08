@@ -15,13 +15,12 @@ from typing import Union, Optional, AsyncGenerator
 # Database modules (Updated for 5 DBs)
 from database.ia_filterdb import Media, Media2, Media3, Media4, Media5, choose_mediaDB, db as clientDB
 from database.users_chats_db import db
-from database.join_reqs import JoinReqs
 
 # Info imports
 from info import (
     SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL, 
     DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5,
-    RESTART_INTERVAL, REQ_CHANNEL
+    RESTART_INTERVAL
 )
 from utils import temp
 from sample_info import tempDict
@@ -85,17 +84,7 @@ class Bot(Client):
 
         await super().start()
 
-        # Handle Dynamic REQ_CHANNEL if missing
-        if REQ_CHANNEL is None:
-            with open("./dynamic.env", "wt+") as f:
-                req = await JoinReqs().get_fsub_chat()
-                req_val = req['chat_id'] if req else "False"
-                f.write(f"REQ_CHANNEL={req_val}\n")
-            logging.info("Loading REQ_CHANNEL from database... Restarting to apply.")
-            os.execl(sys.executable, sys.executable, "bot.py")
-            return        
-
-        # Ensure indexes in all 5 DBs
+        # Ensure indexes in all 5 DBs safely
         await Media.ensure_indexes()
         if DATABASE_URI2: await Media2.ensure_indexes()
         if DATABASE_URI3: await Media3.ensure_indexes()
@@ -143,7 +132,7 @@ class Bot(Client):
     async def restart(self):
         logging.info("Restarting bot process...")
         await self.stop()
-        # VPS/Koyeb/Docker compatible restart
+        # VPS/Koyeb/Docker/Render compatible restart
         os._exit(0)
 
     async def schedule_restart(self, interval: str = RESTART_INTERVAL):
