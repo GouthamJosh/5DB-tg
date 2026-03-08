@@ -8,36 +8,36 @@ from datetime import datetime, timedelta
 
 # Pyrogram and other imports
 import tgcrypto
-from pyrogram import Client, __version__, types
+from pyrogram import Client, __version__, types, idle
 from pyrogram.raw.all import layer
 from typing import Union, Optional, AsyncGenerator
 
-# Database modules
-from database.ia_filterdb import Media, Media2, choose_mediaDB, db as clientDB
+# Database modules (Updated for 5 DBs)
+from database.ia_filterdb import Media, Media2, Media3, Media4, Media5, choose_mediaDB, db as clientDB
 from database.users_chats_db import db
+from database.join_reqs import JoinReqs
+
+# Info imports
 from info import (
-    SESSION,
-    API_ID,
-    API_HASH,
-    BOT_TOKEN,
-    LOG_STR,
-    LOG_CHANNEL,
-    SECONDDB_URI,
-    DATABASE_URI,
-    RESTART_INTERVAL,
+    SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL, 
+    DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_URI4, DATABASE_URI5,
+    RESTART_INTERVAL, REQ_CHANNEL
 )
 from utils import temp
 from sample_info import tempDict
 
-# aiohttp web for webserver
+# Webserver and Indexing imports
 from aiohttp import web as webserver
 from plugins.webcode import bot_run
+# Ensure you import your merged indexing function and incol here:
+from plugins.index import index_files_to_db_all, incol 
+
 from os import environ
 
 # Prevent asyncio logging spam
 logging.getLogger("asyncio").setLevel(logging.CRITICAL - 1)
 
-# Peer ID invalid fix
+# Peer ID invalid fix (Crucial for certain forwarded messages)
 from pyrogram import utils as pyroutils
 pyroutils.MIN_CHAT_ID = -999999999999
 pyroutils.MIN_CHANNEL_ID = -100999999999999
@@ -50,6 +50,20 @@ logging.getLogger("imdbpy").setLevel(logging.ERROR)
 
 PORT_CODE = environ.get("PORT", "8080")
 
+async def restart_index(bot):
+    """Resumes interrupted indexing tasks using MongoDB progress."""
+    progress_document = incol.find_one({"_id": "index_progress"})
+    if progress_document:
+        last_indexed_file = progress_document.get("last_indexed_file", 0)
+        last_msg_id = progress_document.get("last_msg_id")
+        chat_id = progress_document.get("chat_id")            
+        temp.CURRENT = int(last_indexed_file)
+        
+        msg = await bot.send_message(chat_id=int(LOG_CHANNEL), text="🔄 Restarting interrupted Indexing process...")
+        logging.info(f"Resuming index at message {temp.CURRENT}")
+        
+        # Resuming using the round-robin indexer
+        await index_files_to_db_all(last_msg_id, chat_id, msg, bot)                    
 
 class Bot(Client):
     def __init__(self):
@@ -71,28 +85,24 @@ class Bot(Client):
 
         await super().start()
 
-        # Ensure indexes in DBs
+        # Handle Dynamic REQ_CHANNEL if missing
+        if REQ_CHANNEL is None:
+            with open("./dynamic.env", "wt+") as f:
+                req = await JoinReqs().get_fsub_chat()
+                req_val = req['chat_id'] if req else "False"
+                f.write(f"REQ_CHANNEL={req_val}\n")
+            logging.info("Loading REQ_CHANNEL from database... Restarting to apply.")
+            os.execl(sys.executable, sys.executable, "bot.py")
+            return        
+
+        # Ensure indexes in all 5 DBs
         await Media.ensure_indexes()
-        await Media2.ensure_indexes()
+        if DATABASE_URI2: await Media2.ensure_indexes()
+        if DATABASE_URI3: await Media3.ensure_indexes()
+        if DATABASE_URI4: await Media4.ensure_indexes()
+        if DATABASE_URI5: await Media5.ensure_indexes()
 
-        # Check DB space and choose DB
-        stats = await clientDB.command("dbStats")
-        free_dbSize = round(
-            512
-            - ((stats["dataSize"] / (1024 * 1024)) + (stats["indexSize"] / (1024 * 1024))),
-            2,
-        )
-        if SECONDDB_URI and free_dbSize < 350:
-            tempDict["indexDB"] = SECONDDB_URI
-            logging.info(
-                f"Since Primary DB has only {free_dbSize} MB left, Secondary DB will be used."
-            )
-        elif SECONDDB_URI is None:
-            logging.error("Missing second DB URI! Add SECONDDB_URI now. Exiting...")
-            exit()
-        else:
-            logging.info(f"Primary DB has enough space ({free_dbSize} MB), continuing with it.")
-
+        # Initialize dynamic DB routing
         await choose_mediaDB()
 
         # Get bot info
@@ -107,18 +117,21 @@ class Bot(Client):
         try:
             await self.send_message(
                 chat_id=LOG_CHANNEL,
-                text="✅ Bot Started Successfully!\n⚡ Kuttu Bot2 with 2DB Feature Active."
+                text="✅ Bot Started Successfully!\n⚡ 5-DB Feature & Auto-Restart Active."
             )
         except Exception as e:
             logging.error(f"Could not send start message: {e}")
 
-        print("⚡ Og Eva Re-edited — 2 DB System Initialized ⚡")
+        print("⚡ Og Eva Re-edited — 5 DB System Initialized ⚡")
 
         # Run web server
         client = webserver.AppRunner(await bot_run())
         await client.setup()
         bind_address = "0.0.0.0"
         await webserver.TCPSite(client, bind_address, PORT_CODE).start()
+
+        # Check for interrupted indexing tasks
+        await restart_index(self)
 
         # Schedule restart
         asyncio.create_task(self.schedule_restart(RESTART_INTERVAL))
@@ -130,7 +143,7 @@ class Bot(Client):
     async def restart(self):
         logging.info("Restarting bot process...")
         await self.stop()
-        # Koyeb/Docker compatible restart
+        # VPS/Koyeb/Docker compatible restart
         os._exit(0)
 
     async def schedule_restart(self, interval: str = RESTART_INTERVAL):
@@ -155,7 +168,7 @@ class Bot(Client):
                 try:
                     await self.send_message(
                         chat_id=LOG_CHANNEL,
-                        text=f"⚠️ Bot will restart in 1 minute (every {interval}).",
+                        text=f"⚠️ Bot will restart in 1 minute (Scheduled every {interval}) to clear memory.",
                     )
                 except Exception as e:
                     logging.error(f"Could not send restart warning: {e}")
@@ -187,7 +200,6 @@ class Bot(Client):
                 yield message
                 current += 1
 
-
 # Helper function: Parse restart interval
 def parse_interval(interval: str) -> int:
     """
@@ -198,16 +210,12 @@ def parse_interval(interval: str) -> int:
         raise ValueError("Invalid interval format. Use e.g., '1h', '2d', '30m'.")
     value, unit = match.groups()
     value = int(value)
-    if unit == "d":
-        return value * 24 * 60 * 60
-    elif unit == "h":
-        return value * 60 * 60
-    elif unit == "m":
-        return value * 60
-    else:
-        raise ValueError("Invalid time unit. Only 'd', 'h', 'm' are allowed.")
+    if unit == "d": return value * 24 * 60 * 60
+    elif unit == "h": return value * 60 * 60
+    elif unit == "m": return value * 60
+    else: raise ValueError("Invalid time unit. Only 'd', 'h', 'm' are allowed.")
 
 
-# Run bot
-app = Bot()
-app.run()
+if __name__ == "__main__":
+    app = Bot()
+    app.run()
