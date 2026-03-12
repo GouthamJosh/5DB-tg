@@ -230,6 +230,8 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     if offset < 0: offset = 0
 
+    fetch_length = offset + max_results  # how many docs to pull from each DB
+
     # ── Run every DB query concurrently (counts + fetches) ──────────────────
     (counts, f1, f2, f3, f4, f5) = await asyncio.gather(
         asyncio.gather(
