@@ -190,66 +190,75 @@ async def index_files_to_db_single(lst_msg_id, chat, msg, bot, db_num):
         try:
             current = temp.CURRENT
             temp.CANCEL = False
-            
-            async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
+
+            # ── BATCH FETCH: get up to 200 messages per Telegram API call ────
+            BATCH = 200
+            msg_ids = list(range(temp.CURRENT, lst_msg_id + 1))
+
+            for batch_start in range(0, len(msg_ids), BATCH):
                 if temp.CANCEL:
                     break
-                
-                current += 1
-                
-                # EXACTLY EVERY 20 SECONDS UPDATE UI
-                if time.time() - last_update_time >= 20:
-                    last_update_time = time.time() # Reset the 20-second timer
-                    
-                    tz = pytz.timezone('Asia/Kolkata')
-                    ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
-                    
-                    elapsed_time = time.time() - start_time
-                    processed_count = current - fst_msg_id + 1
-                    
-                    if processed_count > 0:
-                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count)
-                    else:
-                        remaining_time = 0
-                        
-                    remaining_time_str = get_readable_time(remaining_time)
-                    elapsed_time_str = get_readable_time(elapsed_time)
-                    remaining_index = lst_msg_id - current
-                    
-                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
-                    try:
-                        await msg.edit_text(
-                            f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
-                            f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
-                            f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
-                            f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
-                            f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
-                            f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
-                            f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
-                            reply_markup=reply)
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
 
-                if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
-                    no_media += 1
-                    continue
-                
-                media = getattr(message, message.media.value, None)
-                if not media or media.mime_type not in ['video/mp4', 'video/x-matroska']:
-                    no_media += 1
-                    continue
-                
-                media.file_type = message.media.value
-                media.caption = message.caption
-                
-                if await check_file(media) == "okda":
-                    aynav, vnay = await save_file(media)
-                    
-                    if aynav: total_files += 1
-                    elif vnay == 0: duplicate += 1
-                    elif vnay == 2: errors += 1
-                else:
-                    duplicate += 1                
+                batch_ids = msg_ids[batch_start: batch_start + BATCH]
+                try:
+                    messages = await bot.get_messages(chat, batch_ids)
+                except FloodWait as e:
+                    await asyncio.sleep(e.value)
+                    messages = await bot.get_messages(chat, batch_ids)
+
+                for message in messages:
+                    if temp.CANCEL:
+                        break
+
+                    current += 1
+
+                    # ── UI UPDATE every 20 seconds ───────────────────────────
+                    if time.time() - last_update_time >= 20:
+                        last_update_time = time.time()
+                        tz = pytz.timezone('Asia/Kolkata')
+                        ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
+                        elapsed_time = time.time() - start_time
+                        processed_count = current - fst_msg_id + 1
+                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count) if processed_count > 0 else 0
+                        remaining_time_str = get_readable_time(remaining_time)
+                        elapsed_time_str = get_readable_time(elapsed_time)
+                        remaining_index = lst_msg_id - current
+                        reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                        try:
+                            await msg.edit_text(
+                                f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
+                                f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
+                                f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
+                                f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
+                                f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
+                                f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
+                                f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
+                                reply_markup=reply)
+                        except FloodWait as e:
+                            await asyncio.sleep(e.value)
+
+                    if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
+                        no_media += 1
+                        continue
+
+                    media = getattr(message, message.media.value, None)
+                    if not media or media.mime_type not in ['video/mp4', 'video/x-matroska']:
+                        no_media += 1
+                        continue
+
+                    media.file_type = message.media.value
+                    media.caption = message.caption
+
+                    if await check_file(media) == "okda":
+                        aynav, vnay = await save_file(media)
+                        if aynav: total_files += 1
+                        elif vnay == 0: duplicate += 1
+                        elif vnay == 2: errors += 1
+                    else:
+                        duplicate += 1
+
+                # Yield to event loop between batches so bot stays responsive
+                await asyncio.sleep(0)
 
         except Exception as e:
             logger.exception(e)
@@ -290,77 +299,84 @@ async def index_files_to_db_all(lst_msg_id, chat, msg, bot):
         try:
             current = temp.CURRENT
             temp.CANCEL = False
-            
-            async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
+
+            # ── BATCH FETCH: 200 messages per Telegram API call ───────────────
+            BATCH = 200
+            msg_ids = list(range(temp.CURRENT, lst_msg_id + 1))
+
+            for batch_start in range(0, len(msg_ids), BATCH):
                 if temp.CANCEL:
                     break
-                
-                current += 1
-                
-                # EXACTLY EVERY 20 SECONDS UPDATE UI AND MONGO PROGRESS
-                if time.time() - last_update_time >= 20:
-                    last_update_time = time.time() # Reset the 20-second timer
-                    
-                    tz = pytz.timezone('Asia/Kolkata')
-                    ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
-                    
-                    elapsed_time = time.time() - start_time
-                    processed_count = current - fst_msg_id + 1
-                    
-                    if processed_count > 0:
-                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count)
+
+                batch_ids = msg_ids[batch_start: batch_start + BATCH]
+                try:
+                    messages = await bot.get_messages(chat, batch_ids)
+                except FloodWait as e:
+                    await asyncio.sleep(e.value)
+                    messages = await bot.get_messages(chat, batch_ids)
+
+                for message in messages:
+                    if temp.CANCEL:
+                        break
+
+                    current += 1
+
+                    # ── UI + Mongo progress update every 20 seconds ──────────
+                    if time.time() - last_update_time >= 20:
+                        last_update_time = time.time()
+                        tz = pytz.timezone('Asia/Kolkata')
+                        ttime = datetime.datetime.now(tz).strftime("%I:%M:%S %p - %d %b, %Y")
+                        elapsed_time = time.time() - start_time
+                        processed_count = current - fst_msg_id + 1
+                        remaining_time = (lst_msg_id - current) * (elapsed_time / processed_count) if processed_count > 0 else 0
+                        remaining_time_str = get_readable_time(remaining_time)
+                        elapsed_time_str = get_readable_time(elapsed_time)
+                        remaining_index = lst_msg_id - current
+
+                        incol.update_one(
+                            {"_id": "index_progress"},
+                            {"$set": {"last_indexed_file": current, "last_msg_id": lst_msg_id, "chat_id": chat}},
+                            upsert=True
+                        )
+
+                        reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
+                        try:
+                            await msg.edit_text(
+                                f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
+                                f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
+                                f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
+                                f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
+                                f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
+                                f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
+                                f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
+                                reply_markup=reply)
+                        except FloodWait as e:
+                            await asyncio.sleep(e.value)
+
+                    if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
+                        no_media += 1
+                        continue
+
+                    media = getattr(message, message.media.value, None)
+                    if not media or media.mime_type not in ['video/mp4', 'video/x-matroska']:
+                        no_media += 1
+                        continue
+
+                    media.file_type = message.media.value
+                    media.caption = message.caption
+
+                    if await check_file(media) == "okda":
+                        tempDict['indexDB'] = db_uris[current % 5]
+                        await choose_mediaDB()
+                        aynav, vnay = await save_file(media)
+                        if aynav: total_files += 1
+                        elif vnay == 0: duplicate += 1
+                        elif vnay == 2: errors += 1
                     else:
-                        remaining_time = 0
-                        
-                    remaining_time_str = get_readable_time(remaining_time)
-                    elapsed_time_str = get_readable_time(elapsed_time)
-                    remaining_index = lst_msg_id - current
-                    
-                    # Save progress to MongoDB (Now only happens every 20 seconds instead of 500 msgs)
-                    incol.update_one(
-                        {"_id": "index_progress"},
-                        {"$set": {"last_indexed_file": current, "last_msg_id": lst_msg_id, "chat_id": chat}},
-                        upsert=True
-                    )
-                    
-                    reply = InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
-                    try:
-                        await msg.edit_text(
-                            f"<b>╭ ▸ ETC: </b>{remaining_time_str} ❙ <b>Remaining:</b> <code>{remaining_index}</code>\n"
-                            f"<b>├ ▸ Last Updated: <i>{ttime}</i></b>\n"
-                            f"<b>╰ ▸ Time Taken: </b>{elapsed_time_str}\n\n"
-                            f"<b>╭ ▸ Fetched:</b> <code>{current}</code>\n"
-                            f"<b>├ ▸ Saved:</b> <code>{total_files}</code>\n"
-                            f"<b>├ ▸ Duplicate:</b> <code>{duplicate}</code>\n"
-                            f"<b>╰ ▸ Non/Errors:</b> <code>{no_media + errors}</code>\n",
-                            reply_markup=reply)
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
-                
-                if message.empty or not message.media or message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT]:
-                    no_media += 1
-                    continue
-                
-                media = getattr(message, message.media.value, None)
-                if not media or media.mime_type not in ['video/mp4', 'video/x-matroska']:
-                    no_media += 1
-                    continue
-                
-                media.file_type = message.media.value
-                media.caption = message.caption
-                
-                if await check_file(media) == "okda":
-                    tempDict['indexDB'] = db_uris[current % 5]
-                    await choose_mediaDB()
-                    
-                    aynav, vnay = await save_file(media)
-                    
-                    if aynav: total_files += 1
-                    elif vnay == 0: duplicate += 1
-                    elif vnay == 2: errors += 1
-                else:
-                    duplicate += 1
-                    
+                        duplicate += 1
+
+                # Yield to event loop between batches so bot stays responsive
+                await asyncio.sleep(0)
         except Exception as e:
             logger.exception(e)
             await msg.edit_text(f'<b>🚫 Error:</b> {e}')
