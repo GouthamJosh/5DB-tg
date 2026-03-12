@@ -657,7 +657,6 @@ async def auto_filter(client, msg, spoll=False):
         # ✅ Check for spammy links/usernames
         if re.search(r'(?im)(?:https?://|www\.|t\.me/|telegram\.dog/)\S+|@[a-z0-9_]{5,32}\b', message.text):
             if message.from_user and message.from_user.id not in ADMINS:
-                await asyncio.sleep()
                 await message.delete()
                 return
 
@@ -687,9 +686,9 @@ async def auto_filter(client, msg, spoll=False):
             return
     else:
         settings = await get_settings(msg.message.chat.id)
-        temp.KEYWORD[message.from_user.id] = search
+        search, files, offset, total_results = spoll   # unpack first
+        temp.KEYWORD[message.from_user.id] = search    # now safe to use
         message = msg.message.reply_to_message
-        search, files, offset, total_results = spoll
 
     pre = 'filep' if settings['file_secure'] else 'file'
     req = message.from_user.id if message.from_user else 0
