@@ -2,6 +2,7 @@ import logging
 from struct import pack
 import re
 import base64
+import asyncio
 from pyrogram.file_id import FileId
 from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
@@ -118,35 +119,43 @@ class Media5(Document):
 
 # --- DYNAMIC DB ROUTING ---
 
+_URI_TO_MODEL = None  # Populated lazily after models are registered
+
+def _get_uri_map():
+    global _URI_TO_MODEL
+    if _URI_TO_MODEL is None:
+        _URI_TO_MODEL = {
+            DATABASE_URI:  Media,
+            DATABASE_URI2: Media2,
+            DATABASE_URI3: Media3,
+            DATABASE_URI4: Media4,
+            DATABASE_URI5: Media5,
+        }
+    return _URI_TO_MODEL
+
 async def choose_mediaDB():
     """Chooses which database to use based on the indexDB key in tempDict."""
     global saveMedia
-    if tempDict.get('indexDB') == DATABASE_URI:
-        saveMedia = Media
-    elif tempDict.get('indexDB') == DATABASE_URI2:
-        saveMedia = Media2
-    elif tempDict.get('indexDB') == DATABASE_URI3:
-        saveMedia = Media3
-    elif tempDict.get('indexDB') == DATABASE_URI4:
-        saveMedia = Media4
-    elif tempDict.get('indexDB') == DATABASE_URI5:
-        saveMedia = Media5
-    else:
-        # Fallback to DB1
+    saveMedia = _get_uri_map().get(tempDict.get('indexDB'), Media)
+    if tempDict.get('indexDB') not in _get_uri_map():
         logger.warning("indexDB not matched or empty, falling back to Media (DB1)")
-        saveMedia = Media
 
+# ── OPTIMISATION: all 5 duplicate-checks run IN PARALLEL (≈5x faster) ──────
 async def check_file(media):
-    """Check if file is present in any of the 5 databases"""
-    file_id, file_ref = unpack_new_file_id(media.file_id)
-    
-    if await Media.collection.find_one({"_id": file_id}): return None
-    if await Media2.collection.find_one({"_id": file_id}): return None
-    if await Media3.collection.find_one({"_id": file_id}): return None
-    if await Media4.collection.find_one({"_id": file_id}): return None
-    if await Media5.collection.find_one({"_id": file_id}): return None
-    
-    return "okda"
+    """
+    Check if file already exists in ANY of the 5 databases.
+    All 5 find_one queries fire simultaneously via asyncio.gather.
+    Returns "okda" when the file is new, None when it is a duplicate.
+    """
+    file_id, _ = unpack_new_file_id(media.file_id)
+    results = await asyncio.gather(
+        Media.collection.find_one({"_id": file_id}, {"_id": 1}),
+        Media2.collection.find_one({"_id": file_id}, {"_id": 1}),
+        Media3.collection.find_one({"_id": file_id}, {"_id": 1}),
+        Media4.collection.find_one({"_id": file_id}, {"_id": 1}),
+        Media5.collection.find_one({"_id": file_id}, {"_id": 1}),
+    )
+    return None if any(results) else "okda"
 
 async def save_file(media):
     """Save file dynamically in the selected database via choose_mediaDB"""
@@ -221,29 +230,22 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     if offset < 0: offset = 0
 
-    # Get total count across all databases
-    total_results = (
-        await Media.count_documents(filter_dict) + 
-        await Media2.count_documents(filter_dict) + 
-        await Media3.count_documents(filter_dict) + 
-        await Media4.count_documents(filter_dict) + 
-        await Media5.count_documents(filter_dict)
+    # ── Run every DB query concurrently (counts + fetches) ──────────────────
+    (counts, f1, f2, f3, f4, f5) = await asyncio.gather(
+        asyncio.gather(
+            Media.count_documents(filter_dict),
+            Media2.count_documents(filter_dict),
+            Media3.count_documents(filter_dict),
+            Media4.count_documents(filter_dict),
+            Media5.count_documents(filter_dict),
+        ),
+        Media.find(filter_dict).sort('$natural', -1).to_list(length=fetch_length),
+        Media2.find(filter_dict).sort('$natural', -1).to_list(length=fetch_length),
+        Media3.find(filter_dict).sort('$natural', -1).to_list(length=fetch_length),
+        Media4.find(filter_dict).sort('$natural', -1).to_list(length=fetch_length),
+        Media5.find(filter_dict).sort('$natural', -1).to_list(length=fetch_length),
     )
-
-    # Fetch slightly more files from each DB to accommodate interleaving based on offset
-    fetch_length = offset + max_results
-
-    cursor1 = Media.find(filter_dict).sort('$natural', -1)
-    cursor2 = Media2.find(filter_dict).sort('$natural', -1)
-    cursor3 = Media3.find(filter_dict).sort('$natural', -1)
-    cursor4 = Media4.find(filter_dict).sort('$natural', -1)
-    cursor5 = Media5.find(filter_dict).sort('$natural', -1)
-
-    f1 = await cursor1.to_list(length=fetch_length)
-    f2 = await cursor2.to_list(length=fetch_length)
-    f3 = await cursor3.to_list(length=fetch_length)
-    f4 = await cursor4.to_list(length=fetch_length)
-    f5 = await cursor5.to_list(length=fetch_length)
+    total_results = sum(counts)
 
     interleaved_files = []
     i1 = i2 = i3 = i4 = i5 = 0
@@ -294,13 +296,15 @@ async def get_bad_files(query, file_type=None, filter=False):
     cursor4 = Media4.find(filter_dict).sort('$natural', -1)
     cursor5 = Media5.find(filter_dict).sort('$natural', -1)
 
-    files = (
-        await cursor1.to_list(length=await Media.count_documents(filter_dict)) +
-        await cursor2.to_list(length=await Media2.count_documents(filter_dict)) +
-        await cursor3.to_list(length=await Media3.count_documents(filter_dict)) +
-        await cursor4.to_list(length=await Media4.count_documents(filter_dict)) +
-        await cursor5.to_list(length=await Media5.count_documents(filter_dict))
+    # ── Fetch from all DBs concurrently ─────────────────────────────────────
+    lists = await asyncio.gather(
+        cursor1.to_list(length=None),
+        cursor2.to_list(length=None),
+        cursor3.to_list(length=None),
+        cursor4.to_list(length=None),
+        cursor5.to_list(length=None),
     )
+    files = [f for lst in lists for f in lst]
 
     return files, len(files)
 
@@ -323,14 +327,18 @@ async def delete_files_below_threshold(db, threshold_size_mb: int = 40, batch_si
     return total_deleted
 
 async def get_file_details(query):
-    """Look up a file_id across all 5 databases sequentially"""
+    """Look up a file_id across all 5 databases — all queries fire concurrently."""
     filter_dict = {'file_id': query}
-    
-    models = [Media, Media2, Media3, Media4, Media5]
-    for model in models:
-        filedetails = await model.find(filter_dict).to_list(length=1)
-        if filedetails:
-            return filedetails
+    results = await asyncio.gather(
+        Media.find(filter_dict).to_list(length=1),
+        Media2.find(filter_dict).to_list(length=1),
+        Media3.find(filter_dict).to_list(length=1),
+        Media4.find(filter_dict).to_list(length=1),
+        Media5.find(filter_dict).to_list(length=1),
+    )
+    for result in results:
+        if result:
+            return result
     return []
 
 # --- UTILS ---
