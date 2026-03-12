@@ -1,32 +1,33 @@
 class script(object):
     
-    START_TXT = """<b><blockquote>𝙷𝙴𝙻L𝙾 {}</blockquote></b>,
-    
-𝐴𝑠𝑘 𝐻𝑒𝑟𝑒 𝑀𝑜𝑣𝑖𝑒𝑠 𝑖𝑛 𝑃𝑚 🔪
-𝙼𝚈 𝙽𝙰𝙼𝙴 𝙸𝚂 <a href=https://t.me/{}>{}</a>, 𝙸 𝙲𝙰𝙽 𝙿𝚁𝙾𝚅𝙸𝙳𝙴 𝙼𝙾𝚅𝙸𝙴𝚂, 𝙹𝚄𝚂𝚃 𝙰𝙳𝙳 𝙼𝙴 𝚃𝙾 𝚈𝙾𝚄𝚁 𝙶𝚁𝙾𝚄𝙿 𝙰𝙽𝙳 𝙴𝙽𝙹𝙾𝚈 😍
+    START_TXT = """<b><blockquote>👋 ʜᴇʟʟᴏ {}</blockquote></b>
 
-<b><blockquote>Using 2DB Feature</blockquote></b>"""
-    
-    HELP_TXT = """𝙷𝙴𝚈 {}
-𝙷𝙴𝚁𝙴 𝙸𝚂 𝚃𝙷𝙴 𝙷𝙴𝙻𝙿 𝙵𝙾𝚁 𝙼𝚈 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝚂."""
+ᴍʏ ɴᴀᴍᴇ ɪꜱ <a href=https://t.me/{}>{}</a> 😍
+ɪ ᴄᴀɴ ꜰɪɴᴅ ᴍᴏᴠɪᴇꜱ & ꜱᴇʀɪᴇꜱ ꜰʀᴏᴍ ᴍʏ ᴅᴀᴛᴀʙᴀꜱᴇ ɪɴꜱᴛᴀɴᴛʟʏ.
+ᴊᴜꜱᴛ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ᴛʏᴘᴇ ᴀɴʏ ᴍᴏᴠɪᴇ ɴᴀᴍᴇ 🎬
+
+<b><blockquote>⚡ Powered by 5DB — 5× More Storage</blockquote></b>"""
+
+    HELP_TXT = """👋 ʜᴇʏ {}
+ʜᴇʀᴇ ɪꜱ ᴛʜᴇ ʜᴇʟᴘ ꜰᴏʀ ᴍʏ ᴄᴏᴍᴍᴀɴᴅꜱ."""
     
     ABOUT_TXT = """<b><blockquote>⍟───[ ᴍʏ ᴅᴇᴛᴀɪʟꜱ ]───⍟</blockquote>
-    
+
 ‣ ᴍʏ ɴᴀᴍᴇ : <a href=https://t.me/{}>Click Here</a>
-‣ ᴍʏ ʙᴇsᴛ ғʀɪᴇɴᴅ : <a href='tg://settings'>ᴛʜɪs ᴘᴇʀsᴏɴ</a> 
-‣ ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href="https://t.me/im_goutham_josh">ᴏᴡɴᴇʀ</a> 
-‣ ʟɪʙʀᴀʀʏ : <a href='https://docs.pyrogram.org/'>ᴘʏʀᴏɢʀᴀᴍ</a> 
-‣ ʟᴀɴɢᴜᴀɢᴇ : <a href='https://www.python.org/download/releases/3.0/'>ᴘʏᴛʜᴏɴ 3</a> 
-‣ ᴅᴀᴛᴀ ʙᴀsᴇ : <a href='https://www.mongodb.com/'>ᴍᴏɴɢᴏ ᴅʙ</a> 
-‣ ʙᴏᴛ sᴇʀᴠᴇʀ : <a href='https://koyeb.com'>Koyeb</a> 
-‣ ʙᴜɪʟᴅ sᴛᴀᴛᴜs : ᴠ2.7.1 [sᴛᴀʙʟᴇ]></b>"""
-    
-    SOURCE_TXT = """<b>NOTE:</b>
+‣ ᴍʏ ʙᴇꜱᴛ ꜰʀɪᴇɴᴅ : <a href='tg://settings'>ᴛʜɪꜱ ᴘᴇʀꜱᴏɴ</a>
+‣ ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href="https://t.me/im_goutham_josh">ᴏᴡɴᴇʀ</a>
+‣ ʟɪʙʀᴀʀʏ : <a href='https://docs.pyrogram.org/'>ᴘʏʀᴏɢʀᴀᴍ</a>
+‣ ʟᴀɴɢᴜᴀɢᴇ : <a href='https://www.python.org/download/releases/3.0/'>ᴘʏᴛʜᴏɴ 3</a>
+‣ ᴅᴀᴛᴀʙᴀꜱᴇ : <a href='https://www.mongodb.com/'>5 × ᴍᴏɴɢᴏ ᴅʙ</a>
+‣ ʙᴏᴛ ꜱᴇʀᴠᴇʀ : <a href='https://koyeb.com'>Koyeb</a>
+‣ ʙᴜɪʟᴅ ꜱᴛᴀᴛᴜꜱ : ᴠ5.0.0 [ꜱᴛᴀʙʟᴇ]</b>"""
 
-Tʜɪs Bᴏᴛ ɪs Fʀᴇᴇ Tᴏ Usᴇ 
-2ᴅʙ Fᴇᴀᴛᴜʀᴇ - SPELL CHECK REMOVED :)
+    SOURCE_TXT = """<b>ɴᴏᴛᴇ:</b>
 
-Sᴏᴜʀᴄᴇ Cᴏᴅᴇ : <a href="github.com/GouthamSER/2DB">𝘾𝙤𝙙𝙚 📌</a>"""
+ᴛʜɪꜱ ʙᴏᴛ ɪꜱ ꜰʀᴇᴇ ᴛᴏ ᴜꜱᴇ 🎉
+5ᴅʙ ꜰᴇᴀᴛᴜʀᴇ — 5× ꜱᴛᴏʀᴀɢᴇ, ꜰᴀꜱᴛᴇʀ ɪɴᴅᴇxɪɴɢ, ᴘᴀʀᴀʟʟᴇʟ ꜱᴇᴀʀᴄʜ ⚡
+
+ꜱᴏᴜʀᴄᴇ ᴄᴏᴅᴇ : <a href="https://github.com/GouthamSER/2DB">𝘾𝙤𝙙𝙚 📌</a>"""
     
     MANUELFILTER_TXT = """ʜᴇʟᴘ: <b>ꜰɪʟᴛᴇʀꜱ</b>
 - ꜰɪʟᴛᴇʀ ɪꜱ ᴀ ꜰᴇᴀᴛᴜʀᴇ ᴡᴇʀᴇ ᴜꜱᴇʀꜱ ᴄᴀɴ ꜱᴇᴛ ᴀᴜᴛᴏᴍᴀᴛᴇᴅ ʀᴇᴘʟɪᴇꜱ ꜰᴏʀ ᴀ ᴘᴀʀᴛɪᴄᴜʟᴀʀ ᴋᴇʏᴡᴏʀᴅ ᴀɴᴅ ɪ ᴡɪʟʟ ʀᴇꜱᴘᴏɴᴅ ᴡʜᴇɴᴇᴠᴇʀ ᴀ ᴋᴇʏᴡᴏʀᴅ ɪꜱ ꜰᴏᴜɴᴅ ɪɴ ᴛʜᴇ ᴍᴇꜱꜱᴀɢᴇ
@@ -112,15 +113,15 @@ Tᴏᴛᴀʟ Fɪʟᴇs Fʀᴏᴍ Aʟʟ DBs: <code>{}</code>
 </b>"""
     
     LOG_TEXT_G = """#NewGroup
-Kuttu Bot 2 DB💫
+⚡ 5DB Filter Bot
 Group = {}(<code>{}</code>)
 Total Members = <code>{}</code>
-Added By - {}
+Added By = {}
 """
     LOG_TEXT_P = """#NewUser
-Kuttu Bot 2 DB⚡
-ID - <code>{}</code>
-Name - {}
+⚡ 5DB Filter Bot
+ID = <code>{}</code>
+Name = {}
 """
     REQINFO = """
 ⚠ iɴꜰᴏʀᴍᴀᴛɪᴏɴ ⚠
