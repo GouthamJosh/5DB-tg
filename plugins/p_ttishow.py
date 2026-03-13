@@ -3,7 +3,11 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong, PeerIdInvalid
 from info import ADMINS, LOG_CHANNEL, SUPPORT_CHAT, MELCOW_NEW_USERS
 from database.users_chats_db import db
-from database.ia_filterdb import Media, Media2, db as clientDB, db2 as clientDB2
+import asyncio
+from database.ia_filterdb import (
+    Media, Media2, Media3, Media4, Media5,
+    db as clientDB, db2 as clientDB2, db3 as clientDB3, db4 as clientDB4, db5 as clientDB5
+)
 from utils import get_size, temp, get_settings
 from Script import script
 from pyrogram.errors import ChatAdminRequired
@@ -140,34 +144,49 @@ async def re_enable_chat(bot, message):
 
 @Client.on_message(filters.command("stats") & filters.incoming)
 async def get_stats(bot, message):
-    rju = await message.reply("Fetching stats...")
-    # primary db
-    totalp = await Media.count_documents()
-    # secondary db
-    totalsec = await Media2.count_documents()
-    # users and chats
-    users = await db.total_users_count()
-    chats = await db.total_chat_count()
-    # primary db stats
-    stats = await clientDB.command("dbStats")
-    used_dbSize = (stats["dataSize"] / (1024 * 1024)) + (stats["indexSize"] / (1024 * 1024))
-    free_dbSize = 512 - used_dbSize
-    # secondary db stats
-    stats2 = await clientDB2.command("dbStats")
-    used_dbSize2 = (stats2["dataSize"] / (1024 * 1024)) + (stats2["indexSize"] / (1024 * 1024))
-    free_dbSize2 = 512 - used_dbSize2
+    rju = await message.reply("⏳ Fetching stats from all 5 databases...")
+
+    def db_usage(stats):
+        used = (stats["dataSize"] / (1024 * 1024)) + (stats["indexSize"] / (1024 * 1024))
+        return round(used, 2), round(512 - used, 2)
+
+    # ── All 10 queries fire concurrently ────────────────────────────────────
+    (
+        total1, total2, total3, total4, total5,
+        users, chats,
+        s1, s2, s3, s4, s5
+    ) = await asyncio.gather(
+        Media.count_documents(),
+        Media2.count_documents(),
+        Media3.count_documents(),
+        Media4.count_documents(),
+        Media5.count_documents(),
+        db.total_users_count(),
+        db.total_chat_count(),
+        clientDB.command("dbStats"),
+        clientDB2.command("dbStats"),
+        clientDB3.command("dbStats"),
+        clientDB4.command("dbStats"),
+        clientDB5.command("dbStats"),
+    )
+
+    used1, free1 = db_usage(s1)
+    used2, free2 = db_usage(s2)
+    used3, free3 = db_usage(s3)
+    used4, free4 = db_usage(s4)
+    used5, free5 = db_usage(s5)
+    grand_total = total1 + total2 + total3 + total4 + total5
+
     await rju.edit_text(
         text=script.STATUS_TXT.format(
-            (int(totalp) + int(totalsec)),  # total combined docs
-            users,                         # total users
-            chats,                         # total chats
-            totalp,                        # primary db docs
-            round(used_dbSize, 2),         # primary used size
-            round(free_dbSize, 2),         # primary free size
-            totalsec,                      # secondary db docs
-            round(used_dbSize2, 2),        # secondary used size
-            round(free_dbSize2, 2)         # secondary free size
-        )
+            grand_total, users, chats,
+            total1, used1, free1,
+            total2, used2, free2,
+            total3, used3, free3,
+            total4, used4, free4,
+            total5, used5, free5,
+        ),
+        parse_mode=enums.ParseMode.HTML
     )
  
 
