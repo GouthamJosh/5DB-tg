@@ -23,6 +23,8 @@ BOT_TOKEN = environ['BOT_TOKEN']
 # RESTART_INTERVAL = "30m"  # every 30 minutes
 RESTART_INTERVAL = environ.get("RESTART_INTERVAL", "2d")
 
+URL = environ.get("URL", "") #keepalive url 
+
 # Bot settings
 CACHE_TIME = int(environ.get('CACHE_TIME', 300))
 USE_CAPTION_FILTER = bool(environ.get('USE_CAPTION_FILTER', False))
