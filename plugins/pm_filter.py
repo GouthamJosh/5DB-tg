@@ -546,38 +546,37 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
 
-        # --- Count documents from all 5 DBs ---
-        total1 = await Media.count_documents()
-        total2 = await Media2.count_documents()
-        total3 = await Media3.count_documents()
-        total4 = await Media4.count_documents()
-        total5 = await Media5.count_documents()
-        grand_total = total1 + total2 + total3 + total4 + total5
-
-        # --- Users and chats ---
-        users = await db.total_users_count()
-        chats = await db.total_chat_count()
-
-        # --- DB sizes ---
+        # ── All 10 queries fire concurrently ────────────────────────────────
         def db_usage(stats):
             used = (stats['dataSize'] / (1024 * 1024)) + (stats['indexSize'] / (1024 * 1024))
             free = 512 - used
             return round(used, 2), round(free, 2)
 
-        stats1 = await clientDB.command('dbStats')
-        used1, free1 = db_usage(stats1)
+        (
+            total1, total2, total3, total4, total5,
+            users, chats,
+            s1, s2, s3, s4, s5
+        ) = await asyncio.gather(
+            Media.count_documents(),
+            Media2.count_documents(),
+            Media3.count_documents(),
+            Media4.count_documents(),
+            Media5.count_documents(),
+            db.total_users_count(),
+            db.total_chat_count(),
+            clientDB.command('dbStats'),
+            clientDB2.command('dbStats'),
+            clientDB3.command('dbStats'),
+            clientDB4.command('dbStats'),
+            clientDB5.command('dbStats'),
+        )
 
-        stats2 = await clientDB2.command('dbStats')
-        used2, free2 = db_usage(stats2)
-
-        stats3 = await clientDB3.command('dbStats')
-        used3, free3 = db_usage(stats3)
-
-        stats4 = await clientDB4.command('dbStats')
-        used4, free4 = db_usage(stats4)
-
-        stats5 = await clientDB5.command('dbStats')
-        used5, free5 = db_usage(stats5)
+        used1, free1 = db_usage(s1)
+        used2, free2 = db_usage(s2)
+        used3, free3 = db_usage(s3)
+        used4, free4 = db_usage(s4)
+        used5, free5 = db_usage(s5)
+        grand_total = total1 + total2 + total3 + total4 + total5
 
         await query.message.edit_text(
             text=script.STATUS_TXT.format(
